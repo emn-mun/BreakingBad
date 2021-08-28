@@ -6,26 +6,18 @@
 //
 
 import UIKit
+import RxSwift
+import RxCocoa
 
 final class CharacterListViewController: UIViewController {
-    private let presenter: CharacterListPresentable
+    private let disposeBag = DisposeBag()
+    private let viewModel: CharacterListViewModelling
+  
     private let tableView = UITableView(frame: .zero)
     private let searchController = UISearchController(searchResultsController: nil)
     
-    private var characters: [CharacterModel] = []
-    private var filteredCharacters: [CharacterModel] = []
-    
-    private var isSearchBarEmpty: Bool {
-        return searchController.searchBar.text?.isEmpty ?? true
-    }
-    
-    var isFiltering: Bool {
-        let searchBarScopeIsFiltering = searchController.searchBar.selectedScopeButtonIndex != 0
-        return searchController.isActive && (!isSearchBarEmpty || searchBarScopeIsFiltering)
-    }
-    
-    init(presenter: CharacterListPresentable) {
-        self.presenter = presenter
+    init(presenter: CharacterListViewModelling) {
+        self.viewModel = presenter
         super.init(nibName: nil, bundle: nil)
         
         setupTableView()
@@ -40,73 +32,26 @@ final class CharacterListViewController: UIViewController {
         super.viewDidLoad()
         setupSearchBar()
         
-        presenter.fetchCharacters { [weak self] result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let characters):
-                    self?.characters = characters
-                    self?.tableView.reloadData()
-                case .failure(let error):
-                    print(error)
+        viewModel.filteredCharacters
+            .asObservable()
+            .bind(to: tableView.rx.items(cellIdentifier: CharacterListCell.reusableIdentifier)) { _, model, cell in
+                if let cell = cell as? CharacterListCell {
+                    cell.set(image: model.imageURLString, characterName: model.name)
                 }
             }
-        }
-    }
-}
-
-extension CharacterListViewController: UITableViewDataSource, UITableViewDelegate {
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: CharacterListCell.reusableIdentifier) as! CharacterListCell
-        let character = characterFor(indexPath)
+            .disposed(by: disposeBag)
         
-        cell.set(image: character.imageURLString, characterName: character.name)
-        return cell
-    }
-    
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        if isFiltering {
-            return filteredCharacters.count
-        }
-        return characters.count
-    }
-    
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        presenter.showCharacterDetails(character: characterFor(indexPath))
-        tableView.deselectRow(at: indexPath, animated: false)
-    }
-}
-
-extension CharacterListViewController: UISearchResultsUpdating {
-    func updateSearchResults(for searchController: UISearchController) {
-        let searchBar = searchController.searchBar
-        filterContentForSearchText(searchBar.text!)
+        tableView.rx.itemSelected.subscribe(onNext: { [weak self] indexPath in
+            self?.tableView.deselectRow(at: indexPath, animated: false)
+            self?.viewModel.itemSelectedIndex.onNext(indexPath)
+        })
+        .disposed(by: disposeBag)
         
-        let category = CharacterModel.Season(rawValue: searchBar.scopeButtonTitles![searchBar.selectedScopeButtonIndex])
-        filterContentForSearchText(searchBar.text!, season: category)
-    }
-    
-    func filterContentForSearchText(_ searchText: String, season: CharacterModel.Season? = nil) {
-        filteredCharacters = characters.filter { (character: CharacterModel) -> Bool in
-            guard let seasons = character.appearance else { return false }
-            let formattedSeason = seasons.map { "S\($0)" }
-            
-            let doesCategoryMatch = season == .all || formattedSeason.contains(season?.rawValue ?? "")
-            
-            if isSearchBarEmpty {
-                return doesCategoryMatch
-            } else {
-                return doesCategoryMatch && character.name.lowercased().contains(searchText.lowercased())
-            }
-        }
+        searchController.searchBar.rx.text.bind(to: viewModel.searchTextObserver)
+            .disposed(by: disposeBag)
         
-        tableView.reloadData()
-    }
-}
-
-extension CharacterListViewController: UISearchBarDelegate {
-    func searchBar(_ searchBar: UISearchBar, selectedScopeButtonIndexDidChange selectedScope: Int) {
-        let season = CharacterModel.Season(rawValue: searchBar.scopeButtonTitles![selectedScope])
-        filterContentForSearchText(searchBar.text!, season: season)
+        searchController.searchBar.rx.selectedScopeButtonIndex.bind(to: viewModel.selectedSeasonIndex)
+            .disposed(by: disposeBag)
     }
 }
 
@@ -120,9 +65,6 @@ private extension CharacterListViewController {
         tableView.estimatedRowHeight = 170
         tableView.rowHeight = UITableView.automaticDimension
         
-        tableView.dataSource = self
-        tableView.delegate = self
-        
         tableView.register(CharacterListCell.self, forCellReuseIdentifier: CharacterListCell.reusableIdentifier)
         
         NSLayoutConstraint.activate([
@@ -134,21 +76,11 @@ private extension CharacterListViewController {
     }
     
     func setupSearchBar() {
-        searchController.searchResultsUpdater = self
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchBar.placeholder = "Search Character"
         navigationItem.searchController = searchController
         definesPresentationContext = true
         
-        searchController.searchBar.scopeButtonTitles = CharacterModel.Season.allCases.map { $0.rawValue }
-        searchController.searchBar.delegate = self
-    }
-    
-    func characterFor(_ indexPath: IndexPath) -> CharacterModel {
-        if isFiltering {
-            return filteredCharacters[indexPath.row]
-        } else {
-            return characters[indexPath.row]
-        }
+        searchController.searchBar.scopeButtonTitles = viewModel.allSeasonNames
     }
 }

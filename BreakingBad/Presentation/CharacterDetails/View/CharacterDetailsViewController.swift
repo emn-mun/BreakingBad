@@ -15,7 +15,7 @@ final class CharacterDetailsViewController: UIViewController {
         static let verticalMargin: CGFloat = 20
     }
     
-    private let presenter: CharacterDetailsPresentable
+    private let viewModel: CharacterDetailsViewModel
     
     private let characterImageView = UIImageView(frame: .zero)
     private let nameLabel = UILabel(frame: .zero)
@@ -24,12 +24,12 @@ final class CharacterDetailsViewController: UIViewController {
     private let nicknameLabel = UILabel(frame: .zero)
     private let seasonAppearanceLabel = UILabel(frame: .zero)
     
-    init(presenter: CharacterDetailsPresentable) {
-        self.presenter = presenter
+    init(presenter: CharacterDetailsViewModel) {
+        self.viewModel = presenter
         super.init(nibName: nil, bundle: nil)
         
         setupLayout()
-        setupViews(with: presenter.viewModel)
+        setupViews(with: viewModel)
     }
     
     override func viewDidLoad() {

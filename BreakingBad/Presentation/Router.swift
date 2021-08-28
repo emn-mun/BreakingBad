@@ -20,14 +20,13 @@ class Router: RouterContract {
     }
 
     func presentCharacterList() {
-        let presenter = CharacterListPresenter(router: self, repository: CharacterListRepository())
+        let presenter = CharacterListViewModel(router: self, repository: CharacterListRepository())
         let viewController = CharacterListViewController(presenter: presenter)
         rootViewController.pushViewController(viewController, animated: false)
     }
 
     func presentCharacterDetails(character: CharacterModel) {
-        let presenter = CharacterDetailsPresenter(viewModel: CharacterDetailsViewModel(model: character))
-        let viewController = CharacterDetailsViewController(presenter: presenter)
+        let viewController = CharacterDetailsViewController(presenter: CharacterDetailsViewModel(model: character))
         rootViewController.pushViewController(viewController, animated: true)
     }
 }

@@ -4,6 +4,7 @@ extension Request {
     public struct Output<T> {
         public let contentType: String
         public let decode: (Data) throws -> T
+      
         private init(contentType: String, decode: @escaping (Data) throws -> T) {
             self.contentType = contentType
             self.decode = decode
